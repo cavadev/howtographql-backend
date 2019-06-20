@@ -61,7 +61,7 @@ git checkout master
 or
 
 ```sh
-git checkout tags/0.1.0
+git checkout tags/0.2.0
 ```
 
 ## Queries
