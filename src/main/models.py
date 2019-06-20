@@ -1,0 +1,17 @@
+from django.db import models
+from django.conf import settings
+
+
+class Link(models.Model):
+    url = models.URLField()
+    description = models.TextField(blank=True)
+    posted_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.CASCADE)
+    created = models.DateTimeField(auto_now_add=True, verbose_name='Created')
+    modified = models.DateTimeField(auto_now=True, verbose_name='Modified')
+
+
+class Vote(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    link = models.ForeignKey('main.Link', related_name='votes', on_delete=models.CASCADE)
+    created = models.DateTimeField(auto_now_add=True, verbose_name='Created')
+    modified = models.DateTimeField(auto_now=True, verbose_name='Modified')
