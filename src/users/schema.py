@@ -1,38 +1,47 @@
 from django.contrib.auth import get_user_model
-
 import graphene
+import django_filters
 from graphene_django import DjangoObjectType
 from graphql_jwt.shortcuts import get_token
+from graphene_django.filter import DjangoFilterConnectionField
 
 
-class UserType(DjangoObjectType):
+class UserNode(DjangoObjectType):
     class Meta:
         model = get_user_model()
+        interfaces = (graphene.relay.Node, )
 
 
-class CreateUser(graphene.Mutation):
+class UserFilter(django_filters.FilterSet):
+    class Meta:
+        model = get_user_model()
+        fields = ['first_name', 'last_name', 'email']
+
+
+class CreateUser(graphene.relay.ClientIDMutation):
     token = graphene.String()
-    user = graphene.Field(UserType)
+    user = graphene.Field(UserNode)
 
-    class Arguments:
+    class Input:
         email = graphene.String(required=True)
         password = graphene.String(required=True)
         firstName = graphene.String(required=True)
         lastName = graphene.String(required=True)
 
-    def mutate(self, info, email, password, firstName, lastName):
-
+    def mutate_and_get_payload(root, info, **input):
         UserModel = get_user_model()
-        user = UserModel.objects.filter(email__iexact=email).first()
+        user = UserModel.objects.filter(email__iexact=input.get('email')).first()
+
         if user:
             raise Exception('User email exist!')
 
         user = get_user_model()(
-            email=email,
-            first_name= firstName,
-            last_name= lastName,
+            email= input.get('email'),
+            first_name= input.get('firstName'),
+            last_name= input.get('lastName'),
         )
-        user.set_password(password)
+
+        user.set_password(input.get('password'))
         user.save()
         user.username = 'usr' + str(user.id)
         user.save()
@@ -40,12 +49,10 @@ class CreateUser(graphene.Mutation):
         return CreateUser(user=user, token=get_token(user))
 
 
-class Query(graphene.AbstractType):
-    me = graphene.Field(UserType)
-    users = graphene.List(UserType)
-
-    def resolve_users(self, info):
-        return get_user_model().objects.all()
+class Query(graphene.ObjectType):
+    me = graphene.Field(UserNode) # no relay format
+    # me = graphene.relay.Node.Field(UserNode)
+    users = DjangoFilterConnectionField(UserNode, filterset_class=UserFilter)
 
     def resolve_me(self, info):
         user = info.context.user
@@ -55,5 +62,5 @@ class Query(graphene.AbstractType):
         return user
 
 
-class Mutation(graphene.ObjectType):
+class Mutation(graphene.AbstractType):
     signup = CreateUser.Field()

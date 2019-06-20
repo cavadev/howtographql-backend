@@ -10,7 +10,7 @@ class Query(users.schema.Query, main.schema.Query, graphene.ObjectType):
 
 
 class ObtainJSONWebToken(graphql_jwt.JSONWebTokenMutation):
-    user = graphene.Field(users.schema.UserType)
+    user = graphene.Field(users.schema.UserNode)
 
     @classmethod
     def resolve(cls, root, info, **kwargs):
@@ -18,9 +18,9 @@ class ObtainJSONWebToken(graphql_jwt.JSONWebTokenMutation):
 
 
 class Mutation(users.schema.Mutation, main.schema.Mutation, graphene.ObjectType):
-    login = ObtainJSONWebToken.Field()
-    verify_token = graphql_jwt.Verify.Field()
-    refresh_token = graphql_jwt.Refresh.Field()
+    login = ObtainJSONWebToken.Field() # no relay format
+    verify_token = graphql_jwt.Verify.Field() # no relay format
+    refresh_token = graphql_jwt.Refresh.Field() # no relay format
 
 
 

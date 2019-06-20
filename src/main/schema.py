@@ -1,70 +1,85 @@
 import graphene
+import django_filters
 from graphene_django import DjangoObjectType
+from graphene_django.filter import DjangoFilterConnectionField
+from graphql_jwt.decorators import login_required
+from graphql_relay.node.node import from_global_id
 from django.db.models import Q
 
-from graphql_jwt.decorators import login_required
-
 from .models import Link, Vote
-from users.schema import UserType
+from users.schema import UserNode
 
 
-class LinkType(DjangoObjectType):
+class CountableConnection(graphene.relay.Connection):
+    # to consider: https://github.com/graphql-python/graphene-django/issues/177
+    total_count = graphene.Int()
+
+    class Meta:
+        abstract = True
+
+    def resolve_total_count(self, info):
+        # return self.length
+        count = getattr(self, 'length')
+        if count is None:
+            count = self.iterable.count()
+        return count
+
+
+class LinkNode(DjangoObjectType):
     class Meta:
         model = Link
+        interfaces = (graphene.relay.Node, )
+        connection_class = CountableConnection
 
 
-class VoteType(DjangoObjectType):
+class LinkFilter(django_filters.FilterSet):
+    class Meta:
+        model = Link
+        fields = {
+            'url': ['icontains'],
+            'description': ['icontains']
+        }
+
+
+class VoteNode(DjangoObjectType):
     class Meta:
         model = Vote
+        interfaces = (graphene.relay.Node,)
 
 
-class CreateLink(graphene.Mutation):
-    id = graphene.Int()
-    url = graphene.String()
-    description = graphene.String()
-    posted_by = graphene.Field(UserType)
-    created = graphene.String()
-    votes = graphene.List(VoteType)
+class CreateLink(graphene.relay.ClientIDMutation):
+    link = graphene.Field(LinkNode)
 
-    class Arguments:
+    class Input:
         url = graphene.String()
         description = graphene.String()
 
     @login_required
-    def mutate(self, info, url, description):
+    def mutate_and_get_payload(root, info, **input):
         user = info.context.user or None
 
         link = Link(
-            url=url,
-            description=description,
+            url=input.get('url'),
+            description=input.get('description'),
             posted_by=user,
         )
         link.save()
 
-        return CreateLink(
-            id=link.id,
-            url=link.url,
-            description=link.description,
-            posted_by=link.posted_by,
-            created=link.created,
-            votes=[]
-        )
+        return CreateLink(link=link)
 
 
-class CreateVote(graphene.Mutation):
-    user = graphene.Field(UserType)
-    link = graphene.Field(LinkType)
+class CreateVote(graphene.relay.ClientIDMutation):
+    user = graphene.Field(UserNode)
+    link = graphene.Field(LinkNode)
 
-    class Arguments:
-        link_id = graphene.Int()
+    class Input:
+        link_id = graphene.String()
 
     @login_required
-    def mutate(self, info, link_id):
-        user = info.context.user
-        # if user.is_anonymous:
-        #    raise Exception('You must be logged to vote!')
+    def mutate_and_get_payload(root, info, **input):
+        user = info.context.user or None
 
-        link = Link.objects.filter(id=link_id).first()
+        link = Link.objects.filter(id=from_global_id(input['link_id'])[1]).first()
         if not link:
             raise Exception('Invalid Link!')
 
@@ -77,42 +92,36 @@ class CreateVote(graphene.Mutation):
 
 
 class Query(graphene.ObjectType):
-    links = graphene.List(
-        LinkType,
+    link = graphene.relay.Node.Field(LinkNode)
+    vote = graphene.relay.Node.Field(VoteNode)
+    links = DjangoFilterConnectionField(
+        LinkNode,
+        filterset_class=LinkFilter,
         search=graphene.String(),
-        first=graphene.Int(),
-        skip=graphene.Int(),
+        orderBy=graphene.String()
     )
-    votes = graphene.List(VoteType)
-    count = graphene.Int()
 
-    def resolve_links(self, info, search=None, first=None, skip=None, **kwargs):
-        qs = Link.objects.all()
+    def resolve_links(self, info, **kwargs):
+        queryset = Link.objects.all()
+        # queryset = LinkFilter(data=**kwargs, queryset=self.links).qs
+        # queryset = LinkFilter(kwargs).qs
 
-        if search:
+        search_term = kwargs.get('search', None)
+        order_by = kwargs.get('orderBy', None)
+
+        if search_term:
             filter = (
-                Q(url__icontains=search) |
-                Q(description__icontains=search)
+                Q(url__icontains=search_term) |
+                Q(description__icontains=search_term)
             )
-            qs = qs.filter(filter)
+            queryset = queryset.filter(filter)
 
-        if skip:
-            qs = qs[skip:]
+        if order_by:
+            queryset = queryset.order_by(order_by)
 
-        if first:
-            qs = qs[:first]
-
-        return qs
-
-    def resolve_count(self, info, **kwargs):
-        return Link.objects.all().count()
-        # see also https://github.com/graphql-python/graphene-django/issues/76
+        return queryset
 
 
-    def resolve_votes(self, info, **kwargs):
-        return Vote.objects.all()
-
-
-class Mutation(graphene.ObjectType):
+class Mutation(graphene.AbstractType):
     create_link = CreateLink.Field()
     create_vote = CreateVote.Field()

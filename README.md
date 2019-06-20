@@ -106,74 +106,111 @@ mutation Login {
 
 ### Links
 
-* Create a new link (need JWT Authorization Header)
+* Create a new link (need JWT Authorization Header). Relay version.
 
 ```graphql
 mutation LinkMutation {
-  createLink(
+  createLink(input: {
     url: "https://example.com/account",
     description: "Github Account"
-  ){
-    id
-    url
-    description
-    created
-    postedBy {
+  })
+  {
+    link {
       id
-      username
-      email
-    }
-    votes {
-      id
-      user {
+      url
+      description
+      created
+      postedBy {
         id
+        username
+        email
+      }
+      votes {
+        edges{
+          node{
+            id
+            created
+            user {
+              id
+              username
+            }
+          }
+        }
       }
     }
   }
 }
 ```
 
-* Vote for a link (need JWT Authorization Header)
+* Vote for a link (need JWT Authorization Header). Relay version.
 
 ```graphql
 mutation VoteMutation {
-  createVote(linkId: 1){
+  createVote(input: {
+    linkId: "TGlua05vZGU6Mg=="
+  })
+  {
     link {
       votes {
-        id
-        user {
-          id
+        edges{
+          node{
+            id
+            created
+            user {
+              id
+              username
+            }
+          }
         }
       }
     }
     user {
       id
+      username
     }
   }
 }
 ```
 
-* Get a list of Links
+* Get a list of Links. Relay version.
 
 ```graphql
-query getlinks {
-  links {
-    id
-    created
-    url
-    description
-    postedBy {
-      id
-      username
-    }
-    votes {
-      id
-      user {
+query getLinks {
+  links (
+    first:10,
+    search: "",
+    orderBy:"-created"
+  ){
+    totalCount
+    edges {
+      node {
         id
+        url
+        description
+        created
+        postedBy{
+          id
+          username
+        }
+        votes {
+          edges{
+            node{
+              id
+              created
+              user {
+                id
+                username
+              }
+            }
+          }
+        }
       }
     }
+    pageInfo {
+      endCursor
+      hasNextPage
+    }
   }
-  count
 }
 ```
 
