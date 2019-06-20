@@ -64,6 +64,10 @@ or
 git checkout tags/0.2.0
 ```
 
+### Compare Without/With Relay versions
+
+[Compare Link](https://github.com/cavadev/howtographql-backend/compare/0.1.0...0.2.0)
+
 ## Queries
 
 ### Users
